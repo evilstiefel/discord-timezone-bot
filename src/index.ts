@@ -23,6 +23,9 @@ type messageFn = (message: Discord.Message) => void;
 const getConfig = (id: string): Observable<IGuildSettings> => {
   return from(storage.getItem(id) as Promise<IGuildSettings>).pipe(
     map(config => {
+      if (config === undefined) {
+        return ({ timezones: [] });
+      }
       if (config.hasOwnProperty('timezones')) {
         return config;
       } else {
@@ -61,6 +64,19 @@ const handleMessage = (message: Discord.Message): void => {
     switchMap(words => {
       if (words[0] === '!time') {
         switch (words[1]) {
+          case 'help': {
+            return of({
+              title: 'Commands available',
+              description: `
+              !time — returns a list of all timezones configured with the current local time
+              !time reset — restores the default configuration (America/Los_Angeles)
+              !time add <timezone> — <timezone> refers to a timezone description, e.g. Europe/Berlin or America/Los_Angeles
+              !time remove <timezone> — removes <timezone> from the configuration, if present
+
+              Note that only the first two timezones are shown in the nickname of the bot in the client list
+              `
+            })
+          }
           case 'add': {
             if (!permissions.has(['ADMINISTRATOR'])) {
               return of({
@@ -134,7 +150,6 @@ const handleMessage = (message: Discord.Message): void => {
             } else {
               ratelimits.push(message.guild.id);
               return getConfig(message.guild.id).pipe(
-                filter(config => !!config),
                 map(config => {
                   let description = (config as IGuildSettings).timezones.map(tz => `${tz}: ${format(utcToZonedTime(new Date(Date.now()), tz), 'h:mmbbbbb zzz', { locale: enUS, timeZone: tz })}`).join('\n');
                   if (description.length === 0) {
@@ -175,7 +190,7 @@ client.on('ready', () => {
           startWith(0),
           switchMap(_ => getConfig(guild.id)),
           map(config => {
-            let timezoneStrings: string[] = ['Europe/Berlin', 'America/Los_Angeles', 'Australia/Melbourne'];
+            let timezoneStrings: string[] = [];
             let timezones = [];
             if (config) {
               timezoneStrings = (config).timezones;
@@ -222,8 +237,8 @@ const initializeBot: initializeFn = () => {
     retryWhen(errors => {
       console.log(`Error connecting, delaying retry by 3 seconds...`);
       return errors.pipe(delay(3000));
-    })
-  );
+    }),
+  ).subscribe();
 };
 storage.init().then(() => {
   console.log(`Storage initialized`);
