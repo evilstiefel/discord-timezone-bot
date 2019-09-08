@@ -1,37 +1,230 @@
-import * as Discord from "discord.js";
-import { format } from "date-fns";
-import { interval } from "rxjs";
-import { startWith } from "rxjs/operators";
-import { de } from "date-fns/locale";
+import { format, utcToZonedTime } from 'date-fns-tz';
+import { enUS } from 'date-fns/locale';
+import * as Discord from 'discord.js';
+import { from, interval, Subscription, concat, EMPTY, Observable, of } from 'rxjs';
+import { delay, retryWhen, startWith, switchMap, map, catchError, tap, filter, finalize, mapTo } from 'rxjs/operators';
+
+const storage: any = require('node-persist');
+(enUS as any).code = 'en-US';
+
+interface IGuildSettings {
+  timezones: string[];
+}
+
+const ratelimits: string[] = [];
 
 const client: Discord.Client = new Discord.Client();
 
-let testChannel: Discord.TextChannel | undefined;
+const subscriptions: Subscription[] = [];
 
-client.on("ready", () => {
+type initializeFn = () => void;
+type messageFn = (message: Discord.Message) => void;
+
+const getConfig = (id: string): Observable<IGuildSettings> => {
+  return from(storage.getItem(id) as Promise<IGuildSettings>).pipe(
+    map(config => {
+      if (config.hasOwnProperty('timezones')) {
+        return config;
+      } else {
+        return ({ timezones: [] });
+      }
+    })
+  );
+}
+
+const updateConfig = (server: string, tz: string): Observable<IGuildSettings> => {
+  return getConfig(server).pipe(
+    switchMap(config => {
+      if (config) {
+        config.timezones = config.timezones.filter(zone => zone !== tz).concat(tz);
+      } else {
+        config = { timezones: [tz] };
+      }
+      return from(storage.setItem(server, config) as Promise<any>).pipe(
+        map(_ => config as IGuildSettings)
+      )
+    }),
+  )
+}
+
+const updateNickname = (guild: Discord.Guild, client: Discord.Client, config: IGuildSettings): Observable<boolean> => {
+  return of(guild).pipe(
+    switchMap(guild => guild.fetchMember(client.user)),
+    mapTo(true)
+  )
+}
+
+const handleMessage = (message: Discord.Message): void => {
+  const words = message.content.split(' ');
+  const permissions = new Discord.Permissions(message.member.permissions.bitfield);
+  of(words).pipe(
+    switchMap(words => {
+      if (words[0] === '!time') {
+        switch (words[1]) {
+          case 'add': {
+            if (!permissions.has(['ADMINISTRATOR'])) {
+              return of({
+                title: 'Error',
+                description: 'You lack the necessary permissions'
+              });
+            }
+            const tz = words[2];
+            if (tz) {
+              try {
+                format(utcToZonedTime(new Date(Date.now()), tz), 'h:mmbbbbb zzz', { locale: enUS, timeZone: tz })
+              } catch (e) {
+                return of({ title: 'Error', description: `${tz} is not a valid timezone!` });
+              }
+              return updateConfig(message.guild.id, tz).pipe(
+                map(config => ({
+                  title: 'Success',
+                  description: `The timezone ${tz} was added successfully — updates to the nickname take up to one minute`,
+                }))
+              );
+            }
+          }
+          case 'remove': {
+            if (!permissions.has('ADMINISTRATOR')) {
+              return of({
+                title: 'Error',
+                description: 'You lack the necessary permissions'
+              });
+            } else {
+              const tz = words[2];
+              if (tz) {
+                return from(getConfig(message.guild.id)).pipe(
+                  switchMap(config => {
+                    if (config.timezones.findIndex(zone => zone === tz) !== -1) {
+                      config.timezones = config.timezones.filter(zone => zone !== tz);
+                      return from(storage.setItem(message.guild.id, config)).pipe(
+                        map(_ => ({
+                          title: 'Success',
+                          description: `${tz} removed from config — updates to the nickname take up to one minute`
+                        }))
+                      )
+                    } else {
+                      return of({
+                        title: 'Error/Success',
+                        description: `${tz} was never configured in the first place`
+                      })
+                    }
+                  })
+                )
+              }
+            }
+          }
+          case 'reset': {
+            if (!permissions.has('ADMINISTRATOR')) {
+              return of({
+                title: 'Error',
+                description: 'You lack the necessary permissions',
+              })
+            } else {
+              return from(storage.setItem(message.guild.id, { timezones: ['America/Los_Angeles'] })).pipe(
+                map(_ => ({
+                  title: 'Success',
+                  description: 'Timezones reset to default value of PST'
+                }))
+              )
+            }
+          }
+          case undefined: {
+            if (ratelimits.includes(message.guild.id)) {
+              return EMPTY;
+            } else {
+              ratelimits.push(message.guild.id);
+              return getConfig(message.guild.id).pipe(
+                filter(config => !!config),
+                map(config => {
+                  let description = (config as IGuildSettings).timezones.map(tz => `${tz}: ${format(utcToZonedTime(new Date(Date.now()), tz), 'h:mmbbbbb zzz', { locale: enUS, timeZone: tz })}`).join('\n');
+                  if (description.length === 0) {
+                    description = 'No timezones configured!'
+                  }
+                  return ({
+                    title: 'Timezone overview',
+                    description
+                  });
+                }),
+                finalize(() => setTimeout(() => ratelimits.splice(ratelimits.indexOf(message.guild.id), 1), 60000))
+              )
+            }
+          }
+          default:
+            return of({
+              title: 'Invalid command',
+              description: 'Sorry, the command was not recognized'
+            });
+        }
+      } else {
+        return EMPTY;
+      }
+    }),
+    switchMap(response => message.channel.send(new Discord.RichEmbed(response))),
+    catchError(err => {
+      console.log({ err });
+      return EMPTY;
+    })
+  ).subscribe()
+}
+
+client.on('ready', () => {
   client.guilds.forEach(guild => {
     guild.fetchMember(client.user).then(member => {
       if (member.id === client.user.id) {
-        interval(1000 * 60).pipe(
+        subscriptions.push(interval(1000 * 60).pipe(
           startWith(0),
-        ).subscribe(_ => {
-          console.log(`Updating time...`);
-          member.setNickname(`${format(new Date(Date.now()), "EEEEEE HH:mm (OOO)", { locale: de})}`);
-        });
+          switchMap(_ => getConfig(guild.id)),
+          map(config => {
+            let timezoneStrings: string[] = ['Europe/Berlin', 'America/Los_Angeles', 'Australia/Melbourne'];
+            let timezones = [];
+            if (config) {
+              timezoneStrings = (config).timezones;
+            }
+            if (timezoneStrings.length === 0) {
+              return ['Not configured'];
+            }
+            try {
+              timezones = timezoneStrings.map(tz => format(utcToZonedTime(new Date(Date.now()), tz), 'h:mmbbbbb zzz', { locale: enUS, timeZone: tz }));
+            } catch {
+              timezones = ['Invalid timezones'];
+            }
+            return timezones;
+          }),
+          switchMap(timeZones => concat(
+            from(member.setNickname(timeZones.slice(0, 2).join(', '))).pipe(
+              catchError(err => {
+                console.log(`Error updating nickname!`);
+                console.log({ err });
+                return EMPTY;
+              })
+            ),
+          )),
+        ).subscribe());
       }
     });
     console.log(`Connected to server: ${guild.name}`);
     guild.channels.forEach(channel => {
       console.log(`-- ${channel.name} (${channel.type}) - ${channel.id}`);
-      if (channel.name === "test" && channel.type === "text") {
-        testChannel = channel as Discord.TextChannel;
-        testChannel.send("Time-service is back online!")
-          .catch(_ => console.log(`Error sending message to channel.`));
-      }
     });
   });
 });
 
-const secret_token: string = "***REMOVED***";
+client.on('message', handleMessage);
 
-client.login(secret_token);
+client.on('disconnect', () => {
+  subscriptions.forEach(sub => sub.unsubscribe());
+  initializeBot();
+});
+
+const initializeBot: initializeFn = () => {
+  const secret_token: string = '***REMOVED***';
+  from(client.login(secret_token)).pipe(
+    retryWhen(errors => {
+      console.log(`Error connecting, delaying retry by 3 seconds...`);
+      return errors.pipe(delay(3000));
+    }));
+};
+storage.init().then(() => {
+  console.log(`Storage initialized`);
+  initializeBot();
+});
