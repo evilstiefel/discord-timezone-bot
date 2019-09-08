@@ -2,7 +2,7 @@ import { format, utcToZonedTime } from 'date-fns-tz';
 import { enUS } from 'date-fns/locale';
 import * as Discord from 'discord.js';
 import { concat, EMPTY, from, interval, Observable, of, Subscription } from 'rxjs';
-import { catchError, delay, filter, finalize, map, mapTo, retryWhen, startWith, switchMap } from 'rxjs/operators';
+import { catchError, delay, finalize, map, mapTo, retryWhen, startWith, switchMap } from 'rxjs/operators';
 
 const storage: any = require('node-persist');
 (enUS as any).code = 'en-US';
@@ -160,7 +160,7 @@ const handleMessage = (message: Discord.Message): void => {
                     description
                   });
                 }),
-                finalize(() => setTimeout(() => ratelimits.splice(ratelimits.indexOf(message.guild.id), 1), 60000))
+                finalize(() => setTimeout(() => ratelimits.splice(ratelimits.indexOf(message.guild.id), 1), 1000))
               )
             }
           }
