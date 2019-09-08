@@ -69,7 +69,7 @@ const handleMessage = (message: Discord.Message): void => {
               title: 'Commands available',
               description: `
               !time — returns a list of all timezones configured with the current local time
-              !time reset — restores the default configuration (America/Los_Angeles)
+              !time reset — removes all saved timezones
               !time add <timezone> — <timezone> refers to a timezone description, e.g. Europe/Berlin or America/Los_Angeles
               !time remove <timezone> — removes <timezone> from the configuration, if present
 
@@ -136,7 +136,7 @@ const handleMessage = (message: Discord.Message): void => {
                 description: 'You lack the necessary permissions',
               })
             } else {
-              return from(storage.setItem(message.guild.id, { timezones: ['America/Los_Angeles'] })).pipe(
+              return from(storage.setItem(message.guild.id, { timezones: [] })).pipe(
                 map(_ => ({
                   title: 'Success',
                   description: 'Timezones reset to default value of PST'
