@@ -57,13 +57,22 @@ const updateNickname = (guild: Discord.Guild, client: Discord.Client, config: IG
   )
 }
 
+/**
+ * This handles the message commands using !time
+ */
 const handleMessage = (message: Discord.Message): void => {
-  const words = message.content.split(' ');
+  if (message.channel.type !== 'text') {
+    return;
+  }
+  const words = message.cleanContent.split(' ');
   const permissions = new Discord.Permissions(message.member.permissions.bitfield);
   of(words).pipe(
     switchMap(words => {
       if (words[0] === '!time') {
         switch (words[1]) {
+          /**
+           * When the user requests help, list all available commands and print a short description of each
+           */
           case 'help': {
             return of({
               title: 'Commands available',
@@ -77,6 +86,10 @@ const handleMessage = (message: Discord.Message): void => {
               `
             })
           }
+          /**
+           * Command to add a single timezone to the server, must be IANA style.
+           * Can only be used as an admin
+           */
           case 'add': {
             if (!permissions.has(['ADMINISTRATOR'])) {
               return of({
@@ -99,6 +112,10 @@ const handleMessage = (message: Discord.Message): void => {
               );
             }
           }
+          /**
+           * Command to remove a single timezone from the server's config.
+           * Can only be used as an admin
+           */
           case 'remove': {
             if (!permissions.has('ADMINISTRATOR')) {
               return of({
@@ -129,6 +146,9 @@ const handleMessage = (message: Discord.Message): void => {
               }
             }
           }
+          /**
+           * When the user is an admin, he can reset all stored configuration, removing all timezones
+           */
           case 'reset': {
             if (!permissions.has('ADMINISTRATOR')) {
               return of({
@@ -144,6 +164,9 @@ const handleMessage = (message: Discord.Message): void => {
               )
             }
           }
+          /**
+           * When there is no command, show the configured timezones and the respective times
+           */
           case undefined: {
             if (ratelimits.includes(message.guild.id)) {
               return EMPTY;
@@ -164,6 +187,9 @@ const handleMessage = (message: Discord.Message): void => {
               )
             }
           }
+          /**
+           * for everything that isn't a valid command following !time, print this error message
+           */
           default:
             return of({
               title: 'Invalid command',
@@ -182,6 +208,13 @@ const handleMessage = (message: Discord.Message): void => {
   ).subscribe()
 }
 
+/**
+ * When the client connects to discord, load all configs for joined servers and
+ * create the interval to update the nickname every minute.
+ *
+ * This means that after joining the bot to another server, it needs to be restarted,
+ * otherwise it doesn't know about new guilds it was joined to.
+ */
 client.on('ready', () => {
   client.guilds.forEach(guild => {
     guild.fetchMember(client.user).then(member => {
@@ -224,6 +257,10 @@ client.on('ready', () => {
   });
 });
 
+
+/**
+ * Set up the callback-function when the bot receives a message in chat
+ */
 client.on('message', handleMessage);
 
 client.on('disconnect', () => {
