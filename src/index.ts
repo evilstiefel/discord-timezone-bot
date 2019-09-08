@@ -1,8 +1,8 @@
 import { format, utcToZonedTime } from 'date-fns-tz';
 import { enUS } from 'date-fns/locale';
 import * as Discord from 'discord.js';
-import { from, interval, Subscription, concat, EMPTY, Observable, of } from 'rxjs';
-import { delay, retryWhen, startWith, switchMap, map, catchError, tap, filter, finalize, mapTo } from 'rxjs/operators';
+import { concat, EMPTY, from, interval, Observable, of, Subscription } from 'rxjs';
+import { catchError, delay, filter, finalize, map, mapTo, retryWhen, startWith, switchMap } from 'rxjs/operators';
 
 const storage: any = require('node-persist');
 (enUS as any).code = 'en-US';
@@ -76,7 +76,7 @@ const handleMessage = (message: Discord.Message): void => {
                 return of({ title: 'Error', description: `${tz} is not a valid timezone!` });
               }
               return updateConfig(message.guild.id, tz).pipe(
-                map(config => ({
+                map(_ => ({
                   title: 'Success',
                   description: `The timezone ${tz} was added successfully — updates to the nickname take up to one minute`,
                 }))
@@ -222,7 +222,8 @@ const initializeBot: initializeFn = () => {
     retryWhen(errors => {
       console.log(`Error connecting, delaying retry by 3 seconds...`);
       return errors.pipe(delay(3000));
-    }));
+    })
+  );
 };
 storage.init().then(() => {
   console.log(`Storage initialized`);
