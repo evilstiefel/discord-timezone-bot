@@ -1,8 +1,8 @@
 import { format, utcToZonedTime } from 'date-fns-tz';
 import { enUS } from 'date-fns/locale';
 import * as Discord from 'discord.js';
-import { EMPTY, from, interval, Observable, of, Subscription } from 'rxjs';
-import { catchError, filter, map, startWith, switchMap } from 'rxjs/operators';
+import { EMPTY, from, interval, Observable, of, Subscription, iif, timer } from 'rxjs';
+import { catchError, filter, map, startWith, switchMap, retryWhen, tap } from 'rxjs/operators';
 
 (enUS as any).code = 'en-US';
 
@@ -25,15 +25,7 @@ export class TimezoneBot {
     this.client = new Discord.Client();
     this.storage = storage;
     console.log(`Constructor called`);
-  }
 
-  connect() {
-    this.client.login(this.config.token).then(() => {
-      console.log(`Connected to discord successfully!`);
-    }).catch((err) => {
-      console.log(`Error connecting to discord`);
-      console.log({ err });
-    });
     this.client.on('ready', () => this.createSubscriptions());
     this.client.on('disconnect', (event: CloseEvent) => this.handleDisconnect());
     this.client.on('message', (message: Discord.Message) => this.handleMessage(message));
@@ -44,6 +36,22 @@ export class TimezoneBot {
     this.client.on('guildDelete', (guild: Discord.Guild) => this.removeSubscription(guild.id));
   }
 
+  /**
+   * Connect to the discord network, retrying when something goes wrong (like network outage)
+   */
+  connect() {
+    from(this.client.login(this.config.token)).pipe(
+      retryWhen((error: Observable<Discord.DiscordAPIError>) => {
+        return error.pipe(
+          tap(err => console.log(err.message)),
+          switchMap(() => iif(() => this.config.reconnect, timer(3000), EMPTY))
+        )
+      })
+    ).subscribe(_ => {
+      console.log(`[Timezone Bot] Connected to Discord!`);
+    });
+  }
+
   private createSubscriptions() {
     console.log('Client is ready');
     if (this.client) {
@@ -51,6 +59,9 @@ export class TimezoneBot {
         console.log(`Trying to set up timer for guild ${guild.name}`);
         this.subscriptions = this.subscriptions.concat({ id: guild.id, subscription: this.addGuild(guild) });
       })
+      if (this.client.guilds.array().length === 0) {
+        console.log('[Timezone Bot] The bot has not been invited to any servers yet :(');
+      }
     } else {
       console.log(`Client unavailable`);
     }
@@ -108,16 +119,16 @@ export class TimezoneBot {
           }
         }),
         switchMap(times => from(member.setNickname(times.slice(0, 2).join(', '))).pipe(
-          catchError(err => {
+          catchError((err: Discord.DiscordAPIError) => {
             console.log(`Error updating nickname on server ${guild.name}`);
-            console.log({ err });
+            console.log({ msg: err.message });
             return EMPTY;
           }),
           map(result => ({ result, times }))
         )),
-        catchError(err => {
+        catchError((err: Discord.DiscordAPIError) => {
           console.log(`Error setting up guild ${guild.name} with id ${guild.id}`);
-          console.log({ err });
+          console.log({ msg: err.message });
           return EMPTY;
         })
       ))
@@ -278,9 +289,6 @@ export class TimezoneBot {
   private handleDisconnect() {
     console.info('Disconnected from discord, unsubscribing from all update-feeds...');
     this.subscriptions.forEach(sub => sub.subscription.unsubscribe());
-    if (this.config.reconnect) {
-      this.connect();
-    }
   }
 
   private getTimeFromString(tz: string, timeFormat: string = 'h:mmbbbbb zzz'): string {
