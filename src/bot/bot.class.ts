@@ -283,8 +283,8 @@ export class TimezoneBot {
     }
   }
 
-  private getTimeFromString(tz: string): string {
-    return format(utcToZonedTime(new Date(), tz), 'h:mmbbbbb zzz', { locale: enUS, timeZone: tz });
+  private getTimeFromString(tz: string, timeFormat: string = 'h:mmbbbbb zzz'): string {
+    return format(utcToZonedTime(new Date(), tz), timeFormat, { locale: enUS, timeZone: tz });
   }
 }
 
