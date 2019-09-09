@@ -219,7 +219,7 @@ export class TimezoneBot {
                 return from(this.storage.setItem(message.guild.id, { timezones: [] })).pipe(
                   map(_ => (<Discord.RichEmbed>{
                     title: 'Success',
-                    description: 'Timezones reset to default value of PST'
+                    description: 'All timezones have been removed.'
                   }))
                 )
               }
