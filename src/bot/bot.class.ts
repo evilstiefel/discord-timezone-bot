@@ -19,7 +19,7 @@ export class TimezoneBot {
   private config: IBotConfig;
   private client: Discord.Client;
   private storage: any;
-  private subscriptions: Subscription[] = [];
+  private subscriptions: { id: string, subscription: Subscription }[] = [];
   constructor(config: IBotConfig, storage: any) {
     this.config = config;
     this.client = new Discord.Client();
@@ -41,6 +41,7 @@ export class TimezoneBot {
       console.log(`guildCreate called for guild ${guild.name}`);
       this.addGuild(guild)
     });
+    this.client.on('guildDelete', (guild: Discord.Guild) => this.removeSubscription(guild.id));
   }
 
   private createSubscriptions() {
@@ -48,10 +49,18 @@ export class TimezoneBot {
     if (this.client) {
       this.client.guilds.forEach(guild => {
         console.log(`Trying to set up timer for guild ${guild.name}`);
-        this.subscriptions = this.subscriptions.concat(this.addGuild(guild));
+        this.subscriptions = this.subscriptions.concat({ id: guild.id, subscription: this.addGuild(guild) });
       })
     } else {
       console.log(`Client unavailable`);
+    }
+  }
+
+  private removeSubscription(guildId: string) {
+    const subPair = this.subscriptions.find(s => s.id === guildId);
+    if (subPair) {
+      subPair.subscription.unsubscribe();
+      this.subscriptions = this.subscriptions.filter(s => s.id !== guildId);
     }
   }
 
@@ -104,7 +113,7 @@ export class TimezoneBot {
             console.log({ err });
             return EMPTY;
           }),
-          map(result => ({ result, times}))
+          map(result => ({ result, times }))
         )),
         catchError(err => {
           console.log(`Error setting up guild ${guild.name} with id ${guild.id}`);
@@ -239,7 +248,8 @@ export class TimezoneBot {
                     fields: config.timezones.map(tz => ({
                       inline: true,
                       name: tz,
-                      value: this.getTimeFromString(tz)}))
+                      value: this.getTimeFromString(tz)
+                    }))
                   });
                 })
               )
@@ -267,7 +277,7 @@ export class TimezoneBot {
 
   private handleDisconnect() {
     console.info('Disconnected from discord, unsubscribing from all update-feeds...');
-    this.subscriptions.forEach(sub => sub.unsubscribe());
+    this.subscriptions.forEach(sub => sub.subscription.unsubscribe());
     if (this.config.reconnect) {
       this.connect();
     }
