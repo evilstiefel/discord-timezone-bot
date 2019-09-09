@@ -1,9 +1,9 @@
-import * as Discord from 'discord.js';
-import { Subscription, from, interval, Observable, EMPTY, of, defer } from 'rxjs';
-import { filter, switchMap, map, catchError, delay, retryWhen, tap } from 'rxjs/operators';
-import { format } from 'date-fns-tz';
+import { format, utcToZonedTime } from 'date-fns-tz';
 import { enUS } from 'date-fns/locale';
-import { utcToZonedTime } from 'date-fns-tz';
+import * as Discord from 'discord.js';
+import { EMPTY, from, interval, Observable, of, Subscription } from 'rxjs';
+import { catchError, filter, map, startWith, switchMap } from 'rxjs/operators';
+
 (enUS as any).code = 'en-US';
 
 export interface IBotConfig {
@@ -34,16 +34,20 @@ export class TimezoneBot {
       console.log(`Error connecting to discord`);
       console.log({ err });
     });
-    this.client.on('ready', () => this.createSubscriptions())
-    this.client.on('disconnect', (event: CloseEvent) => this.handleDisconnect())
+    this.client.on('ready', () => this.createSubscriptions());
+    this.client.on('disconnect', (event: CloseEvent) => this.handleDisconnect());
     this.client.on('message', (message: Discord.Message) => this.handleMessage(message));
-    this.client.on('guildCreate', (guild: Discord.Guild) => this.addGuild(guild))
+    this.client.on('guildCreate', (guild: Discord.Guild) => {
+      console.log(`guildCreate called for guild ${guild.name}`);
+      this.addGuild(guild)
+    });
   }
 
   private createSubscriptions() {
     console.log('Client is ready');
     if (this.client) {
       this.client.guilds.forEach(guild => {
+        console.log(`Trying to set up timer for guild ${guild.name}`);
         this.subscriptions = this.subscriptions.concat(this.addGuild(guild));
       })
     } else {
@@ -81,6 +85,7 @@ export class TimezoneBot {
     return from(guild.fetchMember(this.client.user)).pipe(
       filter(member => member.id === this.client.user.id),
       switchMap(member => interval(1000 * 60).pipe(
+        startWith(0),
         switchMap(_ => this.getConfig(guild.id)),
         map(config => {
           const { timezones } = config;
@@ -94,9 +99,6 @@ export class TimezoneBot {
           }
         }),
         switchMap(times => from(member.setNickname(times.slice(0, 2).join(', '))).pipe(
-          tap(_ => {
-            console.log(`Set-up complete for guild ${guild.name}, timezones: ${times.join(', ')}`)
-          }),
           catchError(err => {
             console.log(`Error updating nickname on server ${guild.name}`);
             console.log({ err });
@@ -109,7 +111,9 @@ export class TimezoneBot {
           return EMPTY;
         })
       ))
-    ).subscribe()
+    ).subscribe(_ => {
+      console.log(`Set-up complete for guild ${guild.name}`);
+    })
   }
 
   private handleMessage(message: Discord.Message) {
