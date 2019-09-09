@@ -1,0 +1,20 @@
+# Description
+This bot enables some helpful functions when your users have different timezones. You can add an arbitrary number of zones, for which the bot will provide the current time whenever a user asks for it (`!time` command).
+
+# Installation
+Install all packages by running `npm ci` and then compile the bot via `tsc` (Typescript 3.6 is recommended). In the output folder _dist_, run index.js via your node installation.
+
+Before running the bot, please create a file called *.ENV* in the project root. The contents should be as follows:
+
+~~~bash
+API_TOKEN=<YOUR-TOKEN-HERE>
+~~~
+
+Obviously, replace the token with your bot API-key from Discord.
+
+# Usage
+When you join the bot to your server, there a no default timezones. You can add timezones via the `!time add <timezone>` command. Note that all timezones follow the IANA specification as shown on [https://en.wikipedia.org/wiki/List_of_tz_database_time_zones](Wikipedia) (column _TZ database name_). You can also remove timezones via `!time remove <timezone>`.
+
+All commands are listed via `!time help`. Note that only admins can change the settings for the bot, while all users have access to the list command.
+
+Additionally, the first two time-zones specified work as the placeholder for the nickname of the bot, which are updated every minute. For this to work, the bot needs the permission to change its nickname.
