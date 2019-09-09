@@ -2,9 +2,9 @@
 This bot enables some helpful functions when your users have different timezones. You can add an arbitrary number of zones, for which the bot will provide the current time whenever a user asks for it (`!time` command).
 
 # Installation
-Install all packages by running `npm ci` and then compile the bot via `tsc` (Typescript 3.6 is recommended). In the output folder _dist_, run index.js via your node installation.
+Install all packages by running `npm ci` and then compile the bot via `tsc` (Typescript 3.6 is recommended). In the output folder _dist_, run index.js via your node installation. Note that it it important where you run your node executable. I'd recommend starting it from project root, e.g. `node dist/index.js`, since the folder you start the process from is the one where the storage-folder is created and the bot looks for the `.env` file, as follows:
 
-Before running the bot, please create a file called *.env* in the project root. The contents should be as follows:
+Before running the bot, please create a file called *.env* in the project root (or wherever you want to base your bot-related folders). The contents should be as follows:
 
 ~~~bash
 API_TOKEN=<YOUR-TOKEN-HERE>
