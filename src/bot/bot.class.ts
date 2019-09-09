@@ -250,9 +250,11 @@ export class TimezoneBot {
             case undefined: {
               return this.getConfig(message.guild.id).pipe(
                 map(config => {
-                  let description = (config as IGuildSettings).timezones.map(tz => `${tz}: ${format(utcToZonedTime(new Date(Date.now()), tz), 'h:mmbbbbb zzz', { locale: enUS, timeZone: tz })}`).join('\n');
                   if (config.timezones.length === 0) {
-                    description = 'No timezones configured!'
+                    return (<Discord.RichEmbed>{
+                      title: 'Timezone overview',
+                      description: 'No timezones configured!'
+                    });
                   }
                   return (<Discord.RichEmbed>{
                     title: 'Timezone overview',
