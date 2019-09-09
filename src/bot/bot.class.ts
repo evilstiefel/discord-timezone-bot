@@ -141,8 +141,6 @@ export class TimezoneBot {
     }
     const words = message.cleanContent.split(' ');
     if (!message.member) {
-      console.log(`Message received without member information, skipping...`);
-      console.log({ message });
       return;
     }
     const permissions = new Discord.Permissions(message.member.permissions.bitfield);
