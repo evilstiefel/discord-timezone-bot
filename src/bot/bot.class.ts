@@ -103,7 +103,8 @@ export class TimezoneBot {
             console.log(`Error updating nickname on server ${guild.name}`);
             console.log({ err });
             return EMPTY;
-          })
+          }),
+          map(result => ({ result, times}))
         )),
         catchError(err => {
           console.log(`Error setting up guild ${guild.name} with id ${guild.id}`);
@@ -111,8 +112,8 @@ export class TimezoneBot {
           return EMPTY;
         })
       ))
-    ).subscribe(_ => {
-      console.log(`Set-up complete for guild ${guild.name}`);
+    ).subscribe((info) => {
+      console.log(`Set-up complete for guild ${guild.name}, current times: ${info.times.join(', ')}`);
     })
   }
 
