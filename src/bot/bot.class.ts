@@ -143,10 +143,10 @@ export class TimezoneBot {
     if (!message.member) {
       return;
     }
-    const permissions = new Discord.Permissions(message.member.permissions.bitfield);
     of(words).pipe(
       switchMap(words => {
         if (words[0] === '!time') {
+          const permissions = new Discord.Permissions(message.member.permissions.bitfield);
           switch (words[1]) {
             /**
              * When the user requests help, list all available commands and print a short description of each
