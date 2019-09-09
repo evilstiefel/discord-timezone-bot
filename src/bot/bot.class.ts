@@ -112,9 +112,7 @@ export class TimezoneBot {
           return EMPTY;
         })
       ))
-    ).subscribe((info) => {
-      console.log(`Set-up complete for guild ${guild.name}, current times: ${info.times.join(', ')}`);
-    })
+    ).subscribe()
   }
 
   private handleMessage(message: Discord.Message) {
