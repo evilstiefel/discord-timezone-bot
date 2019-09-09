@@ -140,13 +140,21 @@ export class TimezoneBot {
       return;
     }
     const words = message.cleanContent.split(' ');
-    if (!message.member) {
-      return;
-    }
     of(words).pipe(
       switchMap(words => {
+        if (message.member !== null) {
+          return of({ words, member: message.member });
+        } else {
+          return from(message.guild.fetchMember(message.author)).pipe(
+            map(member => ({ words, member })),
+            catchError(_ => of({ words, member: null }))
+          );
+        }
+      }),
+      filter(({ words, member}) => member !== null),
+      switchMap(({ words, member }) => {
         if (words[0] === '!time') {
-          const permissions = new Discord.Permissions(message.member.permissions.bitfield);
+          const permissions = new Discord.Permissions((member as Discord.GuildMember).permissions.bitfield);
           switch (words[1]) {
             /**
              * When the user requests help, list all available commands and print a short description of each
