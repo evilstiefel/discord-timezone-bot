@@ -68,11 +68,11 @@ export class TimezoneBot {
   }
 
   private removeSubscription(guild: Discord.Guild) {
-    const { id: guildId} = guild;
+    const { id: guildId, name: guildName} = guild;
     const subPair = this.subscriptions.find(s => s.id === guildId);
     if (subPair) {
       subPair.subscription.unsubscribe();
-      console.log(`Removed subscription for guild ${guildId}`);
+      console.log(`Removed subscription for guild ${guildName}`);
       this.subscriptions = this.subscriptions.filter(s => s.id !== guildId);
     }
   }
