@@ -33,7 +33,7 @@ export class TimezoneBot {
       console.log(`guildCreate called for guild ${guild.name}`);
       this.addGuild(guild)
     });
-    this.client.on('guildDelete', (guild: Discord.Guild) => this.removeSubscription(guild.id));
+    this.client.on('guildDelete', (guild: Discord.Guild) => this.removeSubscription(guild));
   }
 
   /**
@@ -67,10 +67,12 @@ export class TimezoneBot {
     }
   }
 
-  private removeSubscription(guildId: string) {
+  private removeSubscription(guild: Discord.Guild) {
+    const { id: guildId} = guild;
     const subPair = this.subscriptions.find(s => s.id === guildId);
     if (subPair) {
       subPair.subscription.unsubscribe();
+      console.log(`Removed subscription for guild ${guildId}`);
       this.subscriptions = this.subscriptions.filter(s => s.id !== guildId);
     }
   }
@@ -102,6 +104,7 @@ export class TimezoneBot {
   }
 
   private addGuild(guild: Discord.Guild): Subscription {
+    this.removeSubscription(guild);
     return from(guild.fetchMember(this.client.user)).pipe(
       filter(member => member.id === this.client.user.id),
       switchMap(member => interval(1000 * 60).pipe(
